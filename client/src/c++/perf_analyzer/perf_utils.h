@@ -67,6 +67,9 @@ extern volatile uint64_t sum_request;
 extern volatile uint64_t bad_request;
 //违规率
 extern volatile double bad_reuqest_rate;
+//宏定义debug
+#define debug(x) std::cout<<#x<<" : "<<x<<std::endl;
+
 
 enum Distribution { POISSON = 0, CONSTANT = 1, CUSTOM = 2 };
 enum SearchMode { LINEAR = 0, BINARY = 1, NONE = 2 };

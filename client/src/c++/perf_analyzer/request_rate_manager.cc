@@ -93,9 +93,12 @@ cb::Error
 RequestRateManager::ChangeRequestRate(const double request_rate)
 {
   //准备工作：启动线程
+  debug("ChangeRequestRate：准备工作！")
   PauseWorkers();
   // Can safely update the schedule
+  debug("ChangeRequestRate：制作schedule")
   GenerateSchedule(request_rate);
+  debug("ChangeRequestRate:启动线程")
   ResumeWorkers();
 
   return cb::Error::Success;
@@ -185,6 +188,7 @@ RequestRateManager::Infer(
     std::shared_ptr<RequestRateManager::ThreadStat> thread_stat,
     std::shared_ptr<RequestRateManager::ThreadConfig> thread_config)
 {
+  debug("Infer Begin!")
   std::shared_ptr<InferContext> ctx(new InferContext());
   thread_stat->status_ = factory_->CreateClientBackend(&(ctx->infer_backend_));
   ctx->options_.reset(new cb::InferOptions(parser_->ModelName()));
@@ -244,6 +248,8 @@ RequestRateManager::Infer(
     }
   }
 
+  debug("Infer :do while")
+
   // run inferencing until receiving exit signal to maintain server load.
   do {
     // Should wait till main thread signals execution start
@@ -270,11 +276,13 @@ RequestRateManager::Infer(
          (thread_config->rounds_ * (*gen_duration_))) -
         (now - start_time_);
 
+    debug(schedule_.size())
     thread_config->index_ = (thread_config->index_ + thread_config->stride_);
     // Loop around the schedule to keep running
     thread_config->rounds_ += (thread_config->index_ / schedule_.size());
     thread_config->index_ = thread_config->index_ % schedule_.size();
 
+    debug("Infer in while medium")
     bool delayed = false;
     if (wait_time.count() < 0) {
       delayed = true;
@@ -282,6 +290,7 @@ RequestRateManager::Infer(
       std::this_thread::sleep_for(wait_time);
     }
 
+    debug(batch_size_)
     // Update the inputs if required
     if (using_json_data_ && (!on_sequence_model_)) {
       int step_id = (thread_config->non_sequence_data_step_id_ %
@@ -322,9 +331,11 @@ RequestRateManager::Infer(
       }
     } else {
       // 发请求，更新请求的【开始时间】
+      debug("Infer Request: begin")
       Request(
           ctx, request_id++, delayed, callback_func, async_req_map,
           thread_stat);
+      debug("Iner Request : end")
     }
 
     if (change_server || early_exit || (!thread_stat->cb_status_.IsOk())) {

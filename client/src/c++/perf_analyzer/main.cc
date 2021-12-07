@@ -45,6 +45,8 @@ volatile uint64_t bad_request;
 volatile bool change_server = false;
 volatile double bad_reuqest_rate = 0.01;
 
+#define debug(x) std::cout<<#x<<" : "<<x<<std::endl;
+
 void
 SignalHandler(int signum)
 {
@@ -719,64 +721,91 @@ const std::string DEFAULT_MEMORY_TYPE,
 std::string triton_server_path,
 std::string model_repository_path,
 std::string memory_type,
-bool target_concurrency,
+bool target_concurrency
+
+
+kind,
+verbose,
+extra_verbose,
+streaming,
+max_threads,
+sequence_length,
+percentile,
+latency_threshold_ms,
+batch_size,
+using_batch_size,
+stability_threshold,
+measurement_window_ms,
+max_trials,
+model_name,
+model_version,
+model_signature_name,
+url,
+filename,
+measurement_mode,
+measurement_request_count,
+protocol,
+http_headers,
+compression_algorithm,
+shared_memory_type,
+output_shm_size,
+input_shapes,
+string_length,
+string_data,
+user_data,
+zero_input,
+concurrent_request_count,
+max_concurrency,
+num_of_sequences,
+dynamic_concurrency_mode,
+async,
+forced_sync,
+using_concurrency_range,
+using_request_rate_range,
+using_custom_intervals,
+using_grpc_compression,
+search_mode,
+request_distribution,
+request_intervals_file,
+using_old_options,
+url_specified,
+max_threads_specified,
+DEFAULT_MEMORY_TYPE,
+triton_server_path,
+model_repository_path,
+memory_type,
+target_concurrency
+
 */
+
+
 int
 solve(
-    
-cb::BackendKind kind,
-bool verbose,
-bool extra_verbose,
-bool streaming,
-size_t max_threads,
-size_t sequence_length,
-int32_t percentile,
-uint64_t latency_threshold_ms,
-int32_t batch_size,
-bool using_batch_size,
-double stability_threshold,
-uint64_t measurement_window_ms,
-size_t max_trials,
-std::string model_name,
-std::string model_version,
-std::string model_signature_name,
-std::string url,
-std::string filename,
-pa::MeasurementMode measurement_mode,
-uint64_t measurement_request_count,
-cb::ProtocolType protocol,
-std::shared_ptr<cb::Headers> http_headers,
-cb::GrpcCompressionAlgorithm compression_algorithm,
-pa::SharedMemoryType shared_memory_type,
-size_t output_shm_size,
-std::unordered_map<std::string, std::vector<int64_t>> input_shapes,
-size_t string_length,
-std::string string_data,
-std::vector<std::string> user_data,
-bool zero_input,
-int32_t concurrent_request_count,
-size_t max_concurrency,
-uint32_t num_of_sequences,
-bool dynamic_concurrency_mode,
-bool async,
-bool forced_sync,
-bool using_concurrency_range,
-bool using_request_rate_range,
-bool using_custom_intervals,
-bool using_grpc_compression,
-pa::SearchMode search_mode,
-pa::Distribution request_distribution,
-std::string request_intervals_file,
-bool using_old_options,
-bool url_specified,
-bool max_threads_specified,
-const std::string DEFAULT_MEMORY_TYPE,
-std::string triton_server_path,
-std::string model_repository_path,
-std::string memory_type,
-bool target_concurrency,
-)
+    cb::BackendKind kind, bool verbose, bool extra_verbose, bool streaming,
+    size_t max_threads, size_t sequence_length, int32_t percentile,
+    uint64_t latency_threshold_ms, int32_t batch_size, bool using_batch_size,
+    double stability_threshold, uint64_t measurement_window_ms,
+    size_t max_trials, std::string model_name, std::string model_version,
+    std::string model_signature_name, std::string url, std::string filename,
+    pa::MeasurementMode measurement_mode, uint64_t measurement_request_count,
+    cb::ProtocolType protocol, std::shared_ptr<cb::Headers> http_headers,
+    cb::GrpcCompressionAlgorithm compression_algorithm,
+    pa::SharedMemoryType shared_memory_type, size_t output_shm_size,
+    std::unordered_map<std::string, std::vector<int64_t>> input_shapes,
+    size_t string_length, std::string string_data,
+    std::vector<std::string> user_data, bool zero_input,
+    int32_t concurrent_request_count, size_t max_concurrency,
+    uint32_t num_of_sequences, bool dynamic_concurrency_mode, bool async,
+    bool forced_sync, bool using_concurrency_range,
+    bool using_request_rate_range, bool using_custom_intervals,
+    bool using_grpc_compression, pa::SearchMode search_mode,
+    pa::Distribution request_distribution, std::string request_intervals_file,
+    bool using_old_options, bool url_specified, bool max_threads_specified,
+    const std::string DEFAULT_MEMORY_TYPE, std::string triton_server_path,
+    std::string model_repository_path, std::string memory_type,
+    bool target_concurrency)
 {
+
   init();
   FAIL_IF_ERR(
       cb::ClientBackendFactory::Create(
@@ -794,6 +823,7 @@ bool target_concurrency,
   /*
    * 通过backend和triton服务器交互，然后得到模型的一些信息和配置
    */
+  debug("通过backend和triton服务器交互，然后得到模型的一些信息和配置!!!")
   if (kind == cb::BackendKind::TRITON ||
       kind == cb::BackendKind::TRITON_C_API) {
     rapidjson::Document model_metadata;
@@ -826,6 +856,7 @@ bool target_concurrency,
     std::cerr << "unsupported client backend kind" << std::endl;
     return 1;
   }
+  debug("完成backend和triton服务器交互")
 
   if ((parser->MaxBatchSize() == 0) && batch_size > 1) {
     std::cerr << "can not specify batch size > 1 as the model does not support "
@@ -1005,6 +1036,7 @@ bool target_concurrency,
   }
   // search_mode = LINEAR
 
+  debug("开始收集数据！！！")
   if (target_concurrency) {
     err = profiler->Profile<size_t>(  //收集
         concurrency_range[SEARCH_RANGE::kSTART],
@@ -1016,7 +1048,7 @@ bool target_concurrency,
         request_rate_range[SEARCH_RANGE::kEND],
         request_rate_range[SEARCH_RANGE::kSTEP], search_mode, summary);
   }
-
+  debug("收集数据完毕！！！")
   if (!err.IsOk()) {
     std::cerr << err << std::endl;
     // In the case of early_exit, the thread does not return and continues to
@@ -1677,13 +1709,14 @@ main(int argc, char** argv)
   signal(SIGINT, pa::SignalHandler);
   // begin:
 
+  debug("First Begin!")
   if (solve(
           kind, verbose, extra_verbose, streaming, max_threads, sequence_length,
           percentile, latency_threshold_ms, batch_size, using_batch_size,
-          stability_threshold, measurement_window_m, max_trials, model_name,
+          stability_threshold, measurement_window_ms, max_trials, model_name,
           model_version, model_signature_name, url, filename, measurement_mode,
           measurement_request_count, protocol, http_headers,
-          compression_algorithm, shared_memory_typ, output_shm_size,
+          compression_algorithm, shared_memory_type, output_shm_size,
           input_shapes, string_length, string_data, user_data, zero_input,
           concurrent_request_count, max_concurrency, num_of_sequences,
           dynamic_concurrency_mode, async, forced_sync, using_concurrency_range,
@@ -1691,20 +1724,25 @@ main(int argc, char** argv)
           using_grpc_compression, search_mode, request_distribution,
           request_intervals_file, using_old_options, url_specified,
           max_threads_specified, DEFAULT_MEMORY_TYPE, triton_server_path,
-          model_repository_path, memory_type))
+          model_repository_path, memory_type, target_concurrency))
     return 1;
 
+  debug("First Finish!")
+
+  pa::change_server = true;
   if (pa::change_server) {
     std::cout << "=========Switch Triton============" << std::endl;
     // trap SIGINT to allow threads to exit gracefully
     // begin:
+    debug("Second Begin!")
+    url = "localhost:8004";
     if (solve(
             kind, verbose, extra_verbose, streaming, max_threads,
             sequence_length, percentile, latency_threshold_ms, batch_size,
-            using_batch_size, stability_threshold, measurement_window_m,
+            using_batch_size, stability_threshold, measurement_window_ms,
             max_trials, model_name, model_version, model_signature_name, url,
             filename, measurement_mode, measurement_request_count, protocol,
-            http_headers, compression_algorithm, shared_memory_typ,
+            http_headers, compression_algorithm, shared_memory_type,
             output_shm_size, input_shapes, string_length, string_data,
             user_data, zero_input, concurrent_request_count, max_concurrency,
             num_of_sequences, dynamic_concurrency_mode, async, forced_sync,
@@ -1712,8 +1750,11 @@ main(int argc, char** argv)
             using_custom_intervals, using_grpc_compression, search_mode,
             request_distribution, request_intervals_file, using_old_options,
             url_specified, max_threads_specified, DEFAULT_MEMORY_TYPE,
-            triton_server_path, model_repository_path, memory_type))
+            triton_server_path, model_repository_path, memory_type,
+            target_concurrency))
       return 1;
+
+      debug("Second Finish!!!")
   }
 
 

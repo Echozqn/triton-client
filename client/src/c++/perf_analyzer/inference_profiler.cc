@@ -351,6 +351,7 @@ InferenceProfiler::Profile(
 }
 /*
  * 
+ *
 */
 cb::Error
 InferenceProfiler::Profile(
@@ -366,11 +367,15 @@ InferenceProfiler::Profile(
   *meets_threshold = true;
 
   //！发送请求，接受返回结果
+  debug("发送请求！")
   RETURN_IF_ERROR(dynamic_cast<RequestRateManager*>(manager_.get())
                       ->ChangeRequestRate(request_rate));
 
+  debug("收集请求数据！")
   //收集所有请求的数据
   err = ProfileHelper(false /*clean_starts*/, status_summary, &is_stable);
+  debug("收集完毕")
+  debug(change_server)
   if(change_server) return cb::Error::Success;
   if (err.IsOk()) {
     err = Report(
@@ -462,12 +467,12 @@ InferenceProfiler::ProfileHelper(
 
     if (measurement_mode_ == MeasurementMode::TIME_WINDOWS) {
       //Measure 
+      debug("ProfileHelper Mesure函数入口")
       error.push(Measure(status_summary, measurement_window_ms_, false));
+      debug("ProfileHelper Measure函数结束")
     } else {
       error.push(Measure(status_summary, measurement_request_count_, true));
     }
-
-    if(change_server) return cb::Error::Success;
 
     if (error.size() >= load_parameters_.stability_window) {
       error.pop();
@@ -636,15 +641,18 @@ InferenceProfiler::Measure(
     RETURN_IF_ERROR(GetServerSideStatus(&end_status));
   }
 
+  debug("Measure:TimestampVector:Begin")
   TimestampVector current_timestamps;
   RETURN_IF_ERROR(manager_->SwapTimestamps(current_timestamps));
-  
+  debug("Measure:TimestampVector:End")
   // current_timestamps是不是就是端到端的请求时延
 
+  debug("Measure:Summarize:Begin")
   RETURN_IF_ERROR(Summarize(
       current_timestamps, start_status, end_status, start_stat, end_stat,
       status_summary, measurement_window_ms));
 
+  debug("Measure:Summarize:End")
   return cb::Error::Success;
 }
 
@@ -662,14 +670,19 @@ InferenceProfiler::Summarize(
   // Get measurement from requests that fall within the time interval
   std::pair<uint64_t, uint64_t> valid_range;
   //计算valid_range
+  debug("Summarize:MeasurementTimestamp:Begin")
   MeasurementTimestamp(timestamps, &valid_range, measurement_window_ms);
+  debug("Summarize:MeasurementTimestamp:End")
   if(change_server) return cb::Error::Success;
   std::vector<uint64_t> latencies;
   //计算所有请求的返回时延，更新valid_sequence_count，delayed_request_count
+  debug("Summarize:ValidLatencyMeasurement:Begin")
   ValidLatencyMeasurement(
       timestamps, valid_range, valid_sequence_count, delayed_request_count,
       &latencies);
+  debug("Summarize:ValidLatencyMeasurement:End")
 
+  
   RETURN_IF_ERROR(SummarizeLatency(latencies, summary));
   RETURN_IF_ERROR(SummarizeClientStat(
       start_stat, end_stat, valid_range.second - valid_range.first,
@@ -713,7 +726,6 @@ InferenceProfiler::MeasurementTimestamp(
 
   }
   std::cout<<"sum_request:"<<sum_request<<"  bad_request:"<<bad_request<<std::endl;
-  if(sum_request > 0)  std::cout<<"NOW RATE:"<<(bad_request * 1.0 / (sum_request * 1.0))<<std::endl;
   if(bad_request * 1.0  > bad_reuqest_rate * sum_request){
     change_server = true;
     return ;
