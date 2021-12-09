@@ -48,23 +48,26 @@ RequestRateManager::Create(
     const std::shared_ptr<cb::ClientBackendFactory>& factory,
     std::unique_ptr<LoadManager>* manager)
 {
+  debug("RequestRateManager::Create First Location")
   std::unique_ptr<RequestRateManager> local_manager(new RequestRateManager(
       async, streaming, request_distribution, batch_size, measurement_window_ms,
       max_threads, num_of_sequences, sequence_length, shared_memory_type,
       output_shm_size, parser, factory));
 
+   debug("RequestRateManager::Create Second Location")
   local_manager->threads_config_.reserve(max_threads);
 
   RETURN_IF_ERROR(local_manager->InitManagerInputs(
       string_length, string_data, zero_input, user_data));
 
+   debug("RequestRateManager::Create Third Location")
   if (local_manager->shared_memory_type_ !=
       SharedMemoryType::NO_SHARED_MEMORY) {
     RETURN_IF_ERROR(local_manager->InitSharedMemory());
   }
-
+   debug("RequestRateManager::Create Fourth Location")
   *manager = std::move(local_manager);
-
+   debug("RequestRateManager::Create End Location")
   return cb::Error::Success;
 }
 
@@ -162,6 +165,8 @@ RequestRateManager::PauseWorkers()
     }
   }
 
+  debug("PauseWorker terminate if !!!")
+
   // Wait to see all threads are paused.！！！
   for (auto& thread_config : threads_config_) {
     while (!thread_config->is_paused_) {
@@ -192,7 +197,8 @@ RequestRateManager::Infer(
     std::shared_ptr<RequestRateManager::ThreadStat> thread_stat,
     std::shared_ptr<RequestRateManager::ThreadConfig> thread_config)
 {
-  debug("Infer Begin!")
+  debug("Infer Begin Action!!!!!")
+  
   std::shared_ptr<InferContext> ctx(new InferContext());
   thread_stat->status_ = factory_->CreateClientBackend(&(ctx->infer_backend_));
   ctx->options_.reset(new cb::InferOptions(parser_->ModelName()));
@@ -253,7 +259,7 @@ RequestRateManager::Infer(
   }
 
   debug("Infer :do while")
-
+  debug(early_exit)
   // run inferencing until receiving exit signal to maintain server load.
   do {
     // Should wait till main thread signals execution start
@@ -265,8 +271,11 @@ RequestRateManager::Infer(
       // Wait if no request should be sent and it is not exiting
       thread_config->is_paused_ = true;
       std::unique_lock<std::mutex> lock(wake_mutex_);
-      wake_signal_.wait(lock, [this]() { return change_server ||early_exit || execute_; });
+      wake_signal_.wait(lock, [this]() { return early_exit || execute_; });
     }
+    debug(execute_)
+    debug(early_exit)
+    debug("Infer while First Flag!")
 
     thread_config->is_paused_ = false;
 

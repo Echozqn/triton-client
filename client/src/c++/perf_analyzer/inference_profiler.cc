@@ -250,13 +250,17 @@ InferenceProfiler::Create(
     std::unique_ptr<InferenceProfiler>* profiler,
     uint64_t measurement_request_count, MeasurementMode measurement_mode)
 {
+
+  debug("InferenceProfiler Create First Location")
   std::unique_ptr<InferenceProfiler> local_profiler(new InferenceProfiler(
       verbose, stability_threshold, measurement_window_ms, max_trials,
       (percentile != -1), percentile, latency_threshold_ms_, protocol, parser,
       std::move(profile_backend), std::move(manager), measurement_request_count,
       measurement_mode));
 
+  debug("InferenceProfiler Create Second Location")
   *profiler = std::move(local_profiler);
+  debug("InferenceProfiler Create Third Location")
   return cb::Error::Success;
 }
 

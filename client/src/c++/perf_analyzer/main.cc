@@ -668,6 +668,7 @@ init()
   pa::bad_request = 0;
   pa::change_server = false;
   summary.clear();
+  pa::early_exit = false;
 }
 
 /*
@@ -888,6 +889,7 @@ solve(
     }
     async = true;
   }
+  debug("main streaming")
 
 
   if (target_concurrency) {
@@ -904,6 +906,7 @@ solve(
         concurrency_range[SEARCH_RANGE::kSTART],
         concurrency_range[SEARCH_RANGE::kEND]);
 
+    debug("main async")
     if (!async) {
       if (concurrency_range[SEARCH_RANGE::kEND] == pa::NO_LIMIT) {
         std::cerr << "WARNING: The maximum attainable concurrency will be "
@@ -926,6 +929,7 @@ solve(
             concurrency_range[SEARCH_RANGE::kEND]);
       }
     }
+    debug("main create concurrency manager")
     FAIL_IF_ERR(
         pa::ConcurrencyManager::Create(
             async, streaming, batch_size, max_threads, max_concurrency,
@@ -934,6 +938,7 @@ solve(
         "failed to create concurrency manager");
 
   } else if (using_request_rate_range) {
+    debug("main create request rate manager")
     FAIL_IF_ERR(
         pa::RequestRateManager::Create(
             async, streaming, measurement_window_ms, request_distribution,
@@ -941,8 +946,10 @@ solve(
             string_length, string_data, zero_input, user_data,
             shared_memory_type, output_shm_size, parser, factory, &manager),
         "failed to create request rate manager");
+    debug("main create request rate manager End !!!!")
 
   } else {
+    debug("main create custom load manager")
     FAIL_IF_ERR(
         pa::CustomLoadManager::Create(
             async, streaming, measurement_window_ms, request_intervals_file,
@@ -951,6 +958,8 @@ solve(
             shared_memory_type, output_shm_size, parser, factory, &manager),
         "failed to create custom load manager");
   }
+
+  debug("main create profiler")
 
   FAIL_IF_ERR(
       pa::InferenceProfiler::Create(
@@ -1060,6 +1069,7 @@ solve(
       return 1;
     }
   }
+  debug("Solve End")
   return 0;
 }
 /*
