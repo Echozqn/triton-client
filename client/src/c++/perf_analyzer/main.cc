@@ -667,6 +667,7 @@ init()
   pa::sum_request = 0;
   pa::bad_request = 0;
   pa::change_server = false;
+  summary.clear();
 }
 
 /*
@@ -807,6 +808,7 @@ solve(
 {
 
   init();
+  //考虑一下shared_ptr的reset方法是否可以不需要初始化
   FAIL_IF_ERR(
       cb::ClientBackendFactory::Create(
           kind, url, protocol, compression_algorithm, http_headers,
@@ -1043,6 +1045,7 @@ solve(
         concurrency_range[SEARCH_RANGE::kEND],
         concurrency_range[SEARCH_RANGE::kSTEP], search_mode, summary);
   } else {
+    //summary作为全局变量，并且是vector的，所以需要初始化
     err = profiler->Profile<double>(  //！！！
         request_rate_range[SEARCH_RANGE::kSTART],
         request_rate_range[SEARCH_RANGE::kEND],

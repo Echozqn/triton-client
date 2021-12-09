@@ -143,6 +143,8 @@ RequestRateManager::PauseWorkers()
   // Pause all the threads
   execute_ = false;
 
+  debug("PauseWorkers")
+  debug(threads_.size())
   if (threads_.empty()) {
     while (threads_.size() < max_threads_) {
       // Launch new thread for inferencing
@@ -152,9 +154,11 @@ RequestRateManager::PauseWorkers()
 
       // Worker threads share the responsibility to generate the inferences at
       // a particular schedule.
+      debug("Infer begin")
       threads_.emplace_back(
           &RequestRateManager::Infer, this, threads_stat_.back(),
           threads_config_.back());//线程执行函数，启动线程
+      debug("Infer end")
     }
   }
 
@@ -337,8 +341,8 @@ RequestRateManager::Infer(
           thread_stat);
       debug("Iner Request : end")
     }
-
-    if (change_server || early_exit || (!thread_stat->cb_status_.IsOk())) {
+    if(change_server) break;
+    if (early_exit || (!thread_stat->cb_status_.IsOk())) {
       if (on_sequence_model_) {
         // Finish off all the ongoing sequences for graceful exit
         for (size_t i = thread_config->id_; i < sequence_stat_.size();
