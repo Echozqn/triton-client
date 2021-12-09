@@ -780,7 +780,7 @@ target_concurrency
 
 */
 
-
+//s
 int
 solve(
     cb::BackendKind kind, bool verbose, bool extra_verbose, bool streaming,
@@ -823,9 +823,7 @@ solve(
 
   parser = std::make_shared<pa::ModelParser>(kind);
 
-  /*
-   * 通过backend和triton服务器交互，然后得到模型的一些信息和配置
-   */
+  //通过backend和triton服务器交互，然后得到模型的一些信息和配置
   debug("通过backend和triton服务器交互，然后得到模型的一些信息和配置!!!")
   if (kind == cb::BackendKind::TRITON ||
       kind == cb::BackendKind::TRITON_C_API) {
@@ -1048,6 +1046,7 @@ solve(
   // search_mode = LINEAR
 
   debug("开始收集数据！！！")
+  debug(pa::early_exit)
   if (target_concurrency) {
     err = profiler->Profile<size_t>(  //收集
         concurrency_range[SEARCH_RANGE::kSTART],
@@ -1072,6 +1071,313 @@ solve(
   debug("Solve End")
   return 0;
 }
+
+
+/*
+int
+solve(
+    cb::BackendKind kind, bool verbose, bool extra_verbose, bool streaming,
+    size_t max_threads, size_t sequence_length, int32_t percentile,
+    uint64_t latency_threshold_ms, int32_t batch_size, bool using_batch_size,
+    double stability_threshold, uint64_t measurement_window_ms,
+    size_t max_trials, std::string model_name, std::string model_version,
+    std::string model_signature_name, std::string url, std::string filename,
+    pa::MeasurementMode measurement_mode, uint64_t measurement_request_count,
+    cb::ProtocolType protocol, std::shared_ptr<cb::Headers> http_headers,
+    cb::GrpcCompressionAlgorithm compression_algorithm,
+    pa::SharedMemoryType shared_memory_type, size_t output_shm_size,
+    std::unordered_map<std::string, std::vector<int64_t>> input_shapes,
+    size_t string_length, std::string string_data,
+    std::vector<std::string> user_data, bool zero_input,
+    int32_t concurrent_request_count, size_t max_concurrency,
+    uint32_t num_of_sequences, bool dynamic_concurrency_mode, bool async,
+    bool forced_sync, bool using_concurrency_range,
+    bool using_request_rate_range, bool using_custom_intervals,
+    bool using_grpc_compression, pa::SearchMode search_mode,
+    pa::Distribution request_distribution, std::string request_intervals_file,
+    bool using_old_options, bool url_specified, bool max_threads_specified,
+    const std::string DEFAULT_MEMORY_TYPE, std::string triton_server_path,
+    std::string model_repository_path, std::string memory_type,
+    bool target_concurrency)
+{
+// trap SIGINT to allow threads to exit gracefully
+  signal(SIGINT, pa::SignalHandler);
+  std::shared_ptr<cb::ClientBackendFactory> factory;
+  FAIL_IF_ERR(
+      cb::ClientBackendFactory::Create(
+          kind, url, protocol, compression_algorithm, http_headers,
+          triton_server_path, model_repository_path, memory_type, extra_verbose,
+          &factory),
+      "failed to create client factory");
+
+  std::unique_ptr<cb::ClientBackend> backend;
+  FAIL_IF_ERR(
+      factory->CreateClientBackend(&backend),
+      "failed to create triton client backend");
+
+  std::shared_ptr<pa::ModelParser> parser =
+      std::make_shared<pa::ModelParser>(kind);
+  if (kind == cb::BackendKind::TRITON ||
+      kind == cb::BackendKind::TRITON_C_API) {
+    rapidjson::Document model_metadata;
+    FAIL_IF_ERR(
+        backend->ModelMetadata(&model_metadata, model_name, model_version),
+        "failed to get model metadata");
+    rapidjson::Document model_config;
+    FAIL_IF_ERR(
+        backend->ModelConfig(&model_config, model_name, model_version),
+        "failed to get model config");
+    FAIL_IF_ERR(
+        parser->InitTriton(
+            model_metadata, model_config, model_version, input_shapes, backend),
+        "failed to create model parser");
+  } else if (kind == cb::BackendKind::TENSORFLOW_SERVING) {
+    rapidjson::Document model_metadata;
+    FAIL_IF_ERR(
+        backend->ModelMetadata(&model_metadata, model_name, model_version),
+        "failed to get model metadata");
+    FAIL_IF_ERR(
+        parser->InitTFServe(
+            model_metadata, model_name, model_version, model_signature_name,
+            batch_size, input_shapes, backend),
+        "failed to create model parser");
+  } else if (kind == cb::BackendKind::TORCHSERVE) {
+    FAIL_IF_ERR(
+        parser->InitTorchServe(model_name, model_version, batch_size),
+        "failed to create model parser");
+  } else {
+    std::cerr << "unsupported client backend kind" << std::endl;
+    return 1;
+  }
+
+  if ((parser->MaxBatchSize() == 0) && batch_size > 1) {
+    std::cerr << "can not specify batch size > 1 as the model does not support "
+                 "batching"
+              << std::endl;
+    return 1;
+  }
+
+  // Change the default value for the --async option for sequential models
+  if ((parser->SchedulerType() == pa::ModelParser::SEQUENCE) ||
+      (parser->SchedulerType() == pa::ModelParser::ENSEMBLE_SEQUENCE)) {
+    if (!async) {
+      async = forced_sync ? false : true;
+    }
+    // Validate the batch_size specification
+    if (batch_size > 1) {
+      std::cerr << "can not specify batch size > 1 when using a sequence model"
+                << std::endl;
+      return 1;
+    }
+  }
+
+  if (streaming) {
+    if (forced_sync) {
+      std::cerr << "can not use streaming with synchronous API" << std::endl;
+      return 1;
+    }
+    async = true;
+  }
+
+  std::unique_ptr<pa::LoadManager> manager;
+
+  if (target_concurrency) {
+    if ((parser->SchedulerType() == pa::ModelParser::SEQUENCE) ||
+        (parser->SchedulerType() == pa::ModelParser::ENSEMBLE_SEQUENCE)) {
+      if (concurrency_range[SEARCH_RANGE::kEND] == pa::NO_LIMIT && async) {
+        std::cerr << "The 'end' concurrency can not be 0 for sequence "
+                     "models when using asynchronous API."
+                  << std::endl;
+        return 1;
+      }
+    }
+    max_concurrency = std::max(
+        concurrency_range[SEARCH_RANGE::kSTART],
+        concurrency_range[SEARCH_RANGE::kEND]);
+
+    if (!async) {
+      if (concurrency_range[SEARCH_RANGE::kEND] == pa::NO_LIMIT) {
+        std::cerr
+            << "WARNING: The maximum attainable concurrency will be limited by "
+               "max_threads specification."
+            << std::endl;
+        concurrency_range[SEARCH_RANGE::kEND] = max_threads;
+      } else {
+        // As only one synchronous request can be generated from a thread at a
+        // time, to maintain the requested concurrency, that many threads need
+        // to be generated.
+        if (max_threads_specified) {
+          std::cerr
+              << "WARNING: Overriding max_threads specification to ensure "
+                 "requested concurrency range."
+              << std::endl;
+        }
+        max_threads = std::max(
+            concurrency_range[SEARCH_RANGE::kSTART],
+            concurrency_range[SEARCH_RANGE::kEND]);
+      }
+    }
+    if ((sequence_id_range != 0) && (sequence_id_range < max_concurrency)) {
+      std::cerr << "sequence id range specified is smallar than the "
+                << "maximum possible concurrency, sequence id collision may "
+                << "occur." << std::endl;
+      return 1;
+    }
+    FAIL_IF_ERR(
+        pa::ConcurrencyManager::Create(
+            async, streaming, batch_size, max_threads, max_concurrency,
+            sequence_length, string_length, string_data, zero_input, user_data,
+            shared_memory_type, output_shm_size, start_sequence_id,
+            sequence_id_range, parser, factory, &manager),
+        "failed to create concurrency manager");
+
+  } else if (using_request_rate_range) {
+    if ((sequence_id_range != 0) && (sequence_id_range < num_of_sequences)) {
+      std::cerr
+          << "sequence id range specified is smallar than the "
+          << "maximum possible number of sequences, sequence id collision "
+          << "may occur." << std::endl;
+      return 1;
+    }
+    FAIL_IF_ERR(
+        pa::RequestRateManager::Create(
+            async, streaming, measurement_window_ms, request_distribution,
+            batch_size, max_threads, num_of_sequences, sequence_length,
+            string_length, string_data, zero_input, user_data,
+            shared_memory_type, output_shm_size, start_sequence_id,
+            sequence_id_range, parser, factory, &manager),
+        "failed to create request rate manager");
+
+  } else {
+    if ((sequence_id_range != 0) && (sequence_id_range < num_of_sequences)) {
+      std::cerr
+          << "sequence id range specified is smallar than the "
+          << "maximum possible number of sequences, sequence id collision "
+          << "may occur." << std::endl;
+      return 1;
+    }
+    FAIL_IF_ERR(
+        pa::CustomLoadManager::Create(
+            async, streaming, measurement_window_ms, request_intervals_file,
+            batch_size, max_threads, num_of_sequences, sequence_length,
+            string_length, string_data, zero_input, user_data,
+            shared_memory_type, output_shm_size, start_sequence_id,
+            sequence_id_range, parser, factory, &manager),
+        "failed to create custom load manager");
+  }
+
+  std::unique_ptr<pa::InferenceProfiler> profiler;
+  FAIL_IF_ERR(
+      pa::InferenceProfiler::Create(
+          verbose, stability_threshold, measurement_window_ms, max_trials,
+          percentile, latency_threshold_ms, protocol, parser,
+          std::move(backend), std::move(manager), &profiler,
+          measurement_request_count, measurement_mode),
+      "failed to create profiler");
+
+  // pre-run report
+  std::cout << "*** Measurement Settings ***" << std::endl;
+  if (kind == cb::BackendKind::TRITON || using_batch_size) {
+    std::cout << "  Batch size: " << batch_size << std::endl;
+  }
+  if (measurement_mode == pa::MeasurementMode::COUNT_WINDOWS) {
+    std::cout << "  Using \"count_windows\" mode for stabilization"
+              << std::endl;
+  } else {
+    std::cout << "  Using \"time_windows\" mode for stabilization" << std::endl;
+  }
+  if (measurement_mode == pa::MeasurementMode::TIME_WINDOWS) {
+    std::cout << "  Measurement window: " << measurement_window_ms << " msec"
+              << std::endl;
+  } else if (measurement_mode == pa::MeasurementMode::COUNT_WINDOWS) {
+    std::cout << "  Minimum number of samples in each window: "
+              << measurement_request_count << std::endl;
+  }
+  if (concurrency_range[SEARCH_RANGE::kEND] != 1) {
+    std::cout << "  Latency limit: " << latency_threshold_ms << " msec"
+              << std::endl;
+    if (concurrency_range[SEARCH_RANGE::kEND] != pa::NO_LIMIT) {
+      std::cout << "  Concurrency limit: "
+                << std::max(
+                       concurrency_range[SEARCH_RANGE::kSTART],
+                       concurrency_range[SEARCH_RANGE::kEND])
+                << " concurrent requests" << std::endl;
+    }
+  }
+  if (request_rate_range[SEARCH_RANGE::kEND] != 1.0) {
+    std::cout << "  Latency limit: " << latency_threshold_ms << " msec"
+              << std::endl;
+    if (request_rate_range[SEARCH_RANGE::kEND] !=
+        static_cast<double>(pa::NO_LIMIT)) {
+      std::cout << "  Request Rate limit: "
+                << std::max(
+                       request_rate_range[SEARCH_RANGE::kSTART],
+                       request_rate_range[SEARCH_RANGE::kEND])
+                << " requests per seconds" << std::endl;
+    }
+  }
+  if (using_request_rate_range) {
+    if (request_distribution == pa::Distribution::POISSON) {
+      std::cout << "  Using poisson distribution on request generation"
+                << std::endl;
+    } else {
+      std::cout << "  Using uniform distribution on request generation"
+                << std::endl;
+    }
+  }
+  if (search_mode == pa::SearchMode::BINARY) {
+    std::cout << "  Using Binary Search algorithm" << std::endl;
+  }
+  if (async) {
+    std::cout << "  Using asynchronous calls for inference" << std::endl;
+  } else {
+    std::cout << "  Using synchronous calls for inference" << std::endl;
+  }
+  if (parser->IsDecoupled()) {
+    std::cout << "  Detected decoupled model, using the first response for "
+                 "measuring latency"
+              << std::endl;
+  }
+
+  if (percentile == -1) {
+    std::cout << "  Stabilizing using average latency" << std::endl;
+  } else {
+    std::cout << "  Stabilizing using p" << percentile << " latency"
+              << std::endl;
+  }
+  std::cout << std::endl;
+
+  std::vector<pa::PerfStatus> summary;
+
+  if (using_custom_intervals) {
+    // Will be using user-provided time intervals, hence no control variable.
+    search_mode = pa::SearchMode::NONE;
+  }
+
+  cb::Error err;
+  if (target_concurrency) {
+    err = profiler->Profile<size_t>(
+        concurrency_range[SEARCH_RANGE::kSTART],
+        concurrency_range[SEARCH_RANGE::kEND],
+        concurrency_range[SEARCH_RANGE::kSTEP], search_mode, summary);
+  } else {
+    err = profiler->Profile<double>(
+        request_rate_range[SEARCH_RANGE::kSTART],
+        request_rate_range[SEARCH_RANGE::kEND],
+        request_rate_range[SEARCH_RANGE::kSTEP], search_mode, summary);
+  }
+
+  if (!err.IsOk()) {
+    std::cerr << err << std::endl;
+    // In the case of early_exit, the thread does not return and continues to
+    // report the summary
+    if (!pa::early_exit) {
+      return 1;
+    }
+  }
+}
+*/
+
 /*
 bool verbose,bool extra_verbose,bool streaming,size_t max_threads,size_t
 sequence_length,int32_t percentile, uint64_t latency_threshold_ms,int32_t
@@ -1771,7 +2077,7 @@ main(int argc, char** argv)
   }
 
 
-  if (summary.size()) {
+  /*if (summary.size()) {
     // Can print more depending on verbose, but it seems too much information
     std::cout << "Inferences/Second vs. Client ";
     if (percentile == -1) {
@@ -1935,5 +2241,6 @@ main(int argc, char** argv)
       }
     }
   }
+  */
   return 0;
 }

@@ -252,6 +252,14 @@ InferenceProfiler::Create(
 {
 
   debug("InferenceProfiler Create First Location")
+  debug(verbose)
+  debug(stability_threshold)
+  debug(measurement_mode)
+  debug(max_trials)
+  debug(percentile)
+  debug(latency_threshold_ms_)
+  debug(protocol)
+  debug(measurement_request_count)
   std::unique_ptr<InferenceProfiler> local_profiler(new InferenceProfiler(
       verbose, stability_threshold, measurement_window_ms, max_trials,
       (percentile != -1), percentile, latency_threshold_ms_, protocol, parser,
